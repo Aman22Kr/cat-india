@@ -11,7 +11,7 @@ export default function Layout() {
   const { pathname } = useLocation();
   const { counselOpen, setCounselOpen } = useStore();
   const [top, setTop] = useState(false);
-  useEffect(() => window.scrollTo(0, 0), [pathname]);
+  useEffect(() => { window.scrollTo(0, 0); }, [pathname]);
   useEffect(() => { const f = () => setTop(window.scrollY > 600); window.addEventListener('scroll', f); return () => window.removeEventListener('scroll', f); }, []);
   return (
     <div className="flex min-h-screen flex-col">

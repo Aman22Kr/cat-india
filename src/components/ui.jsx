@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { motion, useReducedMotion } from 'framer-motion';
 import { Heart, ShoppingCart } from 'lucide-react';
@@ -8,10 +8,27 @@ import { examBySlug, discounted, gst } from '../data';
 
 export function Reveal({ children, delay = 0, className = '', x = 0 }) {
   const reduce = useReducedMotion();
-  if (reduce || MOTION.off) return <div className={className}>{children}</div>;
+  const ref = useRef(null);
+  const [shown, setShown] = useState(false);
+  const skip = reduce || MOTION.off;
+  useEffect(() => {
+    if (skip) return undefined;
+    const el = ref.current;
+    if (!el) return undefined;
+    // Anything already on screen (or any browser without IntersectionObserver) shows immediately.
+    const r = el.getBoundingClientRect();
+    if ((r.top < window.innerHeight && r.bottom > 0) || !('IntersectionObserver' in window)) { setShown(true); return undefined; }
+    const io = new IntersectionObserver(([e]) => { if (e.isIntersecting) { setShown(true); io.disconnect(); } }, { rootMargin: '0px 0px -60px 0px' });
+    io.observe(el);
+    // Safety net: never leave content hidden.
+    const t = setTimeout(() => setShown(true), 4000);
+    return () => { io.disconnect(); clearTimeout(t); };
+  }, [skip]);
+  if (skip) return <div className={className}>{children}</div>;
   return (
-    <motion.div className={className} initial={{ opacity: 0, y: MOTION.distance, x }} whileInView={{ opacity: 1, y: 0, x: 0 }}
-      viewport={{ once: true, margin: '-60px' }} transition={{ duration: MOTION.duration, delay, ease: [0.22, 1, 0.36, 1] }}>
+    <motion.div ref={ref} className={className} initial={{ opacity: 0, y: MOTION.distance, x }}
+      animate={shown ? { opacity: 1, y: 0, x: 0 } : { opacity: 0, y: MOTION.distance, x }}
+      transition={{ duration: MOTION.duration, delay, ease: [0.22, 1, 0.36, 1] }}>
       {children}
     </motion.div>
   );

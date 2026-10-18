@@ -1,37 +1,41 @@
-import { useEffect, useRef, useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { motion, useReducedMotion } from 'framer-motion';
+import { useReducedMotion } from 'framer-motion';
 import { Heart, ShoppingCart } from 'lucide-react';
 import { MOTION } from '../settings';
 import { useStore } from './Store';
 import { examBySlug, discounted, gst } from '../data';
 
+// Content is visible by default. After mount it is briefly hidden and faded in, so a failure
+// anywhere in this logic can never leave a page blank (a 4s safety timer also forces it visible).
 export function Reveal({ children, delay = 0, className = '', x = 0 }) {
   const reduce = useReducedMotion();
   const ref = useRef(null);
-  const [shown, setShown] = useState(false);
+  const [phase, setPhase] = useState('init');
   const skip = reduce || MOTION.off;
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (skip) return undefined;
     const el = ref.current;
     if (!el) return undefined;
-    // Anything already on screen (or any browser without IntersectionObserver) shows immediately.
+    setPhase('hide');
+    const show = () => setPhase('show');
     const r = el.getBoundingClientRect();
-    if ((r.top < window.innerHeight && r.bottom > 0) || !('IntersectionObserver' in window)) { setShown(true); return undefined; }
-    const io = new IntersectionObserver(([e]) => { if (e.isIntersecting) { setShown(true); io.disconnect(); } }, { rootMargin: '0px 0px -60px 0px' });
-    io.observe(el);
-    // Safety net: never leave content hidden.
-    const t = setTimeout(() => setShown(true), 4000);
-    return () => { io.disconnect(); clearTimeout(t); };
+    const inView = r.top < window.innerHeight && r.bottom > 0;
+    let io; let raf;
+    if (inView || !('IntersectionObserver' in window)) {
+      raf = requestAnimationFrame(() => requestAnimationFrame(show));
+    } else {
+      io = new IntersectionObserver(([e]) => { if (e.isIntersecting) { show(); io.disconnect(); } }, { rootMargin: '0px 0px -60px 0px' });
+      io.observe(el);
+    }
+    const t = setTimeout(show, 4000);
+    return () => { clearTimeout(t); if (io) io.disconnect(); if (raf) cancelAnimationFrame(raf); };
   }, [skip]);
   if (skip) return <div className={className}>{children}</div>;
-  return (
-    <motion.div ref={ref} className={className} initial={{ opacity: 0, y: MOTION.distance, x }}
-      animate={shown ? { opacity: 1, y: 0, x: 0 } : { opacity: 0, y: MOTION.distance, x }}
-      transition={{ duration: MOTION.duration, delay, ease: [0.22, 1, 0.36, 1] }}>
-      {children}
-    </motion.div>
-  );
+  const style = phase === 'hide'
+    ? { opacity: 0, transform: `translate(${x}px, ${MOTION.distance}px)`, transition: 'none' }
+    : { opacity: 1, transform: 'none', transition: `opacity ${MOTION.duration}s ease ${delay}s, transform ${MOTION.duration}s cubic-bezier(0.22,1,0.36,1) ${delay}s` };
+  return <div ref={ref} className={className} style={style}>{children}</div>;
 }
 
 // Image with a graceful fallback so no broken-image icons are ever shown.
